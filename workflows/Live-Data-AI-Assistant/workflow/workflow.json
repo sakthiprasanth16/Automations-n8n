@@ -1,0 +1,563 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2a711b24-1275-4537-b86b-98122582c982",
+              "name": "user_query",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "b35e5c9a-0664-4f3d-8fe2-bf66a8d23056",
+              "name": "user_first_name",
+              "value": "={{ $json.message.from.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "7797ed50-a3e4-4d22-a04d-a1b1e078e970",
+              "name": "chat_id",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -32,
+        -48
+      ],
+      "id": "17f09450-b364-4ed3-a99c-1416ed7ccdb0",
+      "name": "Extract User Query"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a strict classifier for a live-data assistant. Respond with ONLY a valid JSON object, nothing else, no markdown, no backticks. The JSON must have exactly two fields: \"route\" and \"category\". \"route\" must be either \"LIVE\" or \"GENERAL\". \"category\" must be one of: NEWS, PRICE, JOBS, STOCK, SEARCH, TECH, GITHUB, WEATHER (only if route is LIVE), or NONE (if route is GENERAL). Use LIVE only if the query needs current or real-time information such as news, prices, jobs, stocks, weather, or trending repos. Use GENERAL for conceptual, educational, or knowledge questions. User query: \"{{ $json.user_query }}\""
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        176,
+        -48
+      ],
+      "id": "0e0aecaf-0c6f-412f-aac5-64738a69e581",
+      "name": "Gemini Query Classifier",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KkPIlRb74u2HCNnN",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.first().json.content.parts[0].text;\n\nconst cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleanedText);\n} catch (error) {\n  parsed = { route: \"GENERAL\", category: \"NONE\" };\n}\n\nconst originalData = $('Extract User Query').first().json;\n\nreturn [\n  {\n    json: {\n      user_query: originalData.user_query,\n      chat_id: originalData.chat_id,\n      user_first_name: originalData.user_first_name,\n      route: parsed.route || \"GENERAL\",\n      category: parsed.category || \"NONE\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        -48
+      ],
+      "id": "83319de4-6fe9-4863-8522-6e7741309821",
+      "name": "Parse Classifier Output"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "53966ef6-9fb4-4af9-9fc9-8f7eedf2df78",
+              "leftValue": "={{ $json.route }}",
+              "rightValue": "LIVE",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        736,
+        -48
+      ],
+      "id": "ce2c4b57-9e11-45cd-8116-cac417f04302",
+      "name": "IF Live or General"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a helpful, knowledgeable AI assistant. Answer the following question clearly and concisely, in a friendly tone suitable for a Telegram chat message (keep it reasonably short, avoid overly long essays unless the question truly needs depth). Question: \"{{ $('Extract User Query').item.json.user_query }}\""
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1456,
+        128
+      ],
+      "id": "806ef3f0-52de-480b-9f65-6c2ecec02df9",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KkPIlRb74u2HCNnN",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1CYraUvhpOdo6_4L--fymyD8Zq6IE0SuT-D4SGbSUMoI",
+          "mode": "list",
+          "cachedResultName": "Ai Live Assistant",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1CYraUvhpOdo6_4L--fymyD8Zq6IE0SuT-D4SGbSUMoI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1CYraUvhpOdo6_4L--fymyD8Zq6IE0SuT-D4SGbSUMoI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "User Query": "={{ $json.user_query }}",
+            "Category": "=\"{{ $json.category }}\"",
+            "Live/General": "=\"{{ $json.route }}\"",
+            "Summary": "=\"{{ $json.summary }}\"",
+            "Final Response": "=\"{{ $json.final_response }}\"",
+            "Status": "=\"{{ $json.status }}\""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "User Query",
+              "displayName": "User Query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Live/General",
+              "displayName": "Live/General",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Final Response",
+              "displayName": "Final Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2464,
+        -144
+      ],
+      "id": "7c6b9aae-530f-43cd-a1fb-6d629fdda102",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "RTJYOVakObILuFYm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const answerText = $input.first().json.content.parts[0].text;\nconst originalData = $('Parse Classifier Output').first().json;\n\nreturn [\n  {\n    json: {\n      timestamp: new Date().toISOString(),\n      user_query: originalData.user_query,\n      chat_id: originalData.chat_id,\n      category: originalData.category,\n      route: originalData.route,\n      summary: \"N/A (General Query)\",\n      final_response: answerText.trim().replace(/[*_`]/g, \"\"),\n      status: \"SUCCESS\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        128
+      ],
+      "id": "6c9cecd0-903b-49a6-ab41-5b5860c52411",
+      "name": "Extract Final Response"
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorId": {
+          "__rl": true,
+          "value": "nFJndFXA5zjCTuudP",
+          "mode": "list",
+          "cachedResultName": "Google Search Results Scraper (apify/google-search-scraper)",
+          "cachedResultUrl": "https://console.apify.com/actors/nFJndFXA5zjCTuudP/input"
+        },
+        "customBody": "={\n  \"queries\": \"{{ $json.user_query }}\",\n  \"maxPagesPerQuery\": 1,\n  \"resultsPerPage\": 5\n}",
+        "timeout": {}
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -208
+      ],
+      "id": "91e85282-50e9-4ece-bb54-193737d4d570",
+      "name": "Call Apify Google Search Scraper",
+      "credentials": {
+        "apifyApi": {
+          "id": "83FwzU7V8hyRcntd",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the raw organicResults array from Apify's output\nconst rawResults = $input.first().json.organicResults || [];\n\n// Pull original context (user query, chat_id, route, category) from Parse Classifier Output\nconst originalData = $('Parse Classifier Output').first().json;\n\n// Convert into clean structured objects, limit to top 5\nconst structuredResults = rawResults.slice(0, 5).map(item => {\n  return {\n    title: item.title || \"No title\",\n    description: item.description || \"No description available\",\n    source: item.websiteTitle || \"Unknown source\",\n    url: item.url || \"\",\n    date: item.date || \"N/A\"\n  };\n});\n\nreturn [\n  {\n    json: {\n      user_query: originalData.user_query,\n      chat_id: originalData.chat_id,\n      route: originalData.route,\n      category: originalData.category,\n      structured_data: structuredResults\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -208
+      ],
+      "id": "680c52a4-83be-458d-bc68-e42f9493a9c2",
+      "name": "Format Structured JSON"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a helpful assistant summarizing live search results for a Telegram chat. The user asked: \"{{ $json.user_query }}\". Below is structured data from a live search (title, description, source, url for each result). Write a clear, concise, friendly summary answering their question, mentioning 2-4 key points from the results. Keep it readable for a chat message, not overly long. Do not just list the raw data - synthesize it into a natural answer. At the end, you may mention 1-2 source names if relevant. Structured data: {{ JSON.stringify($json.structured_data) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1456,
+        -208
+      ],
+      "id": "210eebb1-ba87-4500-94c1-582444768bb9",
+      "name": "Gemini Summary",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "KkPIlRb74u2HCNnN",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const summaryText = $input.first().json.content.parts[0].text;\nconst originalData = $('Format Structured JSON').first().json;\n\nconst sourceTitles = originalData.structured_data\n  .map(item => item.source)\n  .join(\", \");\n\nreturn [\n  {\n    json: {\n      timestamp: new Date().toISOString(),\n      user_query: originalData.user_query,\n      chat_id: originalData.chat_id,\n      category: originalData.category,\n      route: originalData.route,\n      summary: `Sources: ${sourceTitles}`,\n      final_response: summaryText.trim().replace(/[*_`]/g, \"\"),\n      status: \"SUCCESS\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        -208
+      ],
+      "id": "db96c23b-f19f-43f8-aa61-ebddbbe0ccd1",
+      "name": "Extract Final Response (Live)"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        -48
+      ],
+      "id": "a882d331-3f2f-4503-af9f-a234c0e7f1dc",
+      "name": "Telegram Trigger",
+      "webhookId": "assignment1-telegram-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "3QWi05kAEuoQSbsa",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.final_response }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        64
+      ],
+      "id": "d25cfd1a-a25e-42ae-a479-6b1dbede1340",
+      "name": "Send a text message",
+      "webhookId": "e3f2ca16-f2df-4caa-890d-923011a9af44",
+      "credentials": {
+        "telegramApi": {
+          "id": "3QWi05kAEuoQSbsa",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Extract User Query": {
+      "main": [
+        [
+          {
+            "node": "Gemini Query Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Query Classifier": {
+      "main": [
+        [
+          {
+            "node": "Parse Classifier Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classifier Output": {
+      "main": [
+        [
+          {
+            "node": "IF Live or General",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Live or General": {
+      "main": [
+        [
+          {
+            "node": "Call Apify Google Search Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Extract Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Final Response": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Apify Google Search Scraper": {
+      "main": [
+        [
+          {
+            "node": "Format Structured JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Structured JSON": {
+      "main": [
+        [
+          {
+            "node": "Gemini Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Summary": {
+      "main": [
+        [
+          {
+            "node": "Extract Final Response (Live)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Final Response (Live)": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract User Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c923fdd75763ed8927337961c1379b337263332fa2f27a0f8f634c2f073a307e"
+  }
+}
