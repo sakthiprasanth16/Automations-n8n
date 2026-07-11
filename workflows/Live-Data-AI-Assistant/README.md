@@ -104,7 +104,7 @@ delivery)                  Final Response, Status)
 | Chat interface | Telegram Bot API |
 | Automation engine | n8n (self-hosted via Docker) |
 | Live data fetching | Apify — Google Search Results Scraper actor |
-| AI / LLM | Google Gemini 2.5 Flash Lite (classification, summarization, general answers) |
+| AI / LLM | Google Gemini 3.1 Flash Lite (classification, summarization, general answers) |
 | Logging | Google Sheets (OAuth2) |
 | Local → public tunnel | ngrok (static domain) |
 | Containerization | Docker |
@@ -138,7 +138,7 @@ This is an **n8n workflow**, not a coded application — there's no repo to `git
 1. Go to [aistudio.google.com](https://aistudio.google.com/) → sign in with Google.
 2. Left sidebar → **Get API key** → **Create API key** → (if prompted) **Create API key in new project**.
 3. Copy the key (starts with `AIza...`). No billing account should be required — if Google prompts for one, stop and check you're using AI Studio, not Vertex AI.
-4. Confirm **Gemini 2.5 Flash Lite** is available as a model option — this is the model used throughout the workflow.
+4. Confirm **Gemini 3.1 Flash Lite** is available as a model option — this is the model used throughout the workflow.
 
 ---
 
