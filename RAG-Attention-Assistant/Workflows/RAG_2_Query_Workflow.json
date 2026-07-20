@@ -1,0 +1,498 @@
+{
+  "name": "RAG_2_Query_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "a06d4f90-c25f-4dfb-87f1-f1032be0302e",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -10464,
+        784
+      ],
+      "webhookId": "d40c4f5b-38d2-488e-99b8-64822890d939",
+      "credentials": {
+        "telegramApi": {
+          "id": "5R64XqT2UFH0rlFL",
+          "name": "attention-rag"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = items[0].json.message;\n\nreturn [{\n  json: {\n    chatId: msg.chat.id,\n    question: (msg.text || '').trim()\n  }\n}];"
+      },
+      "id": "43bc9db9-6fc9-4fef-875e-cc6ca27f9768",
+      "name": "Extract Question",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -10288,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.question }}",
+        "options": {
+          "systemMessage": "You are a Retrieval Augmented Generation assistant for the paper \"Attention Is All You Need\".\nAlways use the vector store tool to search for relevant passages before answering — never answer from your own knowledge.\nOnly answer using the retrieved context returned by the tool.\nIf the tool returns no relevant passages, or the retrieved content does not contain the answer, reply with EXACTLY this sentence and nothing else:\n\"I could not find relevant information in the knowledge base.\"\nOtherwise, format every answer EXACTLY like this, with no extra commentary:\n\nAnswer:\n<your answer based only on retrieved context>\n\nSources:\n<Document Name> | Chunk #<chunk index> | Page <page number>\n<Document Name> | Chunk #<chunk index> | Page <page number>",
+          "returnIntermediateSteps": true
+        }
+      },
+      "id": "bcc8d79d-7632-44fb-aaa7-591608f18fa1",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -10064,
+        784
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "id": "ffdae747-adad-4f31-a5af-6181d8a5a809",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -10256,
+        1024
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "2mBFr0ywtcTckX6c",
+          "name": "for-rag"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Extract Question').item.json.chatId }}"
+      },
+      "id": "c3913048-422c-49cd-86f3-f2f3700439f8",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        -10080,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Use this tool to search the Attention Is All You Need paper and retrieve relevant passages to answer the user's question. Always call this before answering.",
+        "topK": 6
+      },
+      "id": "b04b7e0b-cb10-4103-8b74-daad095eb40f",
+      "name": "Answer questions with a vector store",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1.1,
+      "position": [
+        -9936,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "id": "ad759ea6-88e1-432a-91d4-c59135672c4b",
+      "name": "Google Gemini Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -9616,
+        1184
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "2mBFr0ywtcTckX6c",
+          "name": "for-rag"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "a887a928-cb48-4a24-bc3c-ea8733d9d86f",
+      "name": "Embeddings Google Gemini1",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -9936,
+        1344
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "2mBFr0ywtcTckX6c",
+          "name": "for-rag"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = $('Extract Question').item.json.chatId;\nconst question = $('Extract Question').item.json.question;\nconst resp = items[0].json;\nlet answer = resp.output || resp.text || 'I could not find relevant information in the knowledge base.';\nanswer = String(answer).trim();\n\nif (!/^answer:/i.test(answer) && answer !== 'I could not find relevant information in the knowledge base.') {\n  answer = `Answer:\\n${answer}\\n\\nSources:\\n- (see retrieved context)`;\n}\n\n// Strip Markdown/LaTeX-style characters that break Telegram's message parser\nanswer = answer\n  .replace(/\\*/g, '')                // remove ALL asterisks (bold, italic, bullets)\n  .replace(/\\$/g, '')                 // remove ALL dollar signs (math wrapping)\n  .replace(/_/g, ' ')                 // replace underscores (e.g. d_model) with spaces\n  .replace(/`/g, \"'\")                 // replace backticks with plain quotes\n  .replace(/^-\\s+/gm, '• ');          // turn markdown \"- \" bullets into plain \"• \" bullets\n\n// Pull the real sources straight out of the Answer/Sources structure itself\nconst sourcesMatch = answer.match(/Sources:\\s*([\\s\\S]*)$/i);\nconst retrievedChunkIds = sourcesMatch ? sourcesMatch[1].trim() : '(no sources returned)';\n\n// Keep the tool's synthesized summary for logging context\nconst steps = resp.intermediateSteps || [];\nlet retrievedSummary = '(no tool call made)';\n\nif (steps.length > 0) {\n  const obs = steps[0].observation || '';\n  try {\n    const parsed = JSON.parse(obs);\n    retrievedSummary = (parsed[0] && parsed[0].response ? parsed[0].response : obs).slice(0, 300);\n  } catch (e) {\n    retrievedSummary = String(obs).slice(0, 300);\n  }\n}\n\nreturn [{\n  json: {\n    chatId,\n    question,\n    finalAnswer: answer,\n    retrievedSummary,\n    retrievedChunkIds\n  }\n}];"
+      },
+      "id": "7d65f024-dace-4014-b279-e9b236e0c6a9",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -9504,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HRiB1CIIH4k8caXS6LRNzX3ViI_yjYLc4A34R68hVfY",
+          "mode": "list",
+          "cachedResultName": "RAG Assistant Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HRiB1CIIH4k8caXS6LRNzX3ViI_yjYLc4A34R68hVfY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HRiB1CIIH4k8caXS6LRNzX3ViI_yjYLc4A34R68hVfY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chatId": "={{ $('Format Response').item.json.chatId }}",
+            "timestamp": "={{ $now.toISO() }}",
+            "question": "={{ $('Format Response').item.json.question }}",
+            "retrievedSummary": "={{ $('Format Response').item.json.retrievedSummary }}",
+            "finalAnswer": "={{ $('Format Response').item.json.finalAnswer }}",
+            "retrievedChunkIds": "={{ $('Format Response').item.json.retrievedChunkIds }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chatId",
+              "displayName": "chatId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "question",
+              "displayName": "question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "retrievedChunkIds",
+              "displayName": "retrievedChunkIds",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "retrievedSummary",
+              "displayName": "retrievedSummary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "finalAnswer",
+              "displayName": "finalAnswer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "565e8b48-5b2f-45b7-a155-27f27687ce4f",
+      "name": "Google Sheets - Log Query",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -8960,
+        816
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "RTJYOVakObILuFYm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "rag-n8n",
+          "mode": "list",
+          "cachedResultName": "rag-n8n"
+        },
+        "options": {
+          "pineconeNamespace": "attention-paper"
+        }
+      },
+      "id": "3941ef49-1efe-4a7b-b598-c8acafbfdb68",
+      "name": "Pinecone Vector Store Retrive",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        -9936,
+        1184
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "hiC34cIma84ZmG7K",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = $('Extract Question').item.json.chatId;\nconst question = $('Extract Question').item.json.question;\nconst errorMsg = (items[0].json.error && items[0].json.error.message) || 'Unknown error';\n\nconsole.log('AI Agent failed:', errorMsg);\n\nreturn [{\n  json: {\n    chatId,\n    question,\n    finalAnswer: 'Sorry, the AI service is temporarily unavailable. Please try again in a moment.',\n    retrievedSummary: `(service error: ${errorMsg})`,\n    retrievedChunkIds: '(error - no retrieval performed)'\n  }\n}];"
+      },
+      "id": "4fa928e6-ef13-4b59-abeb-864c9d3e8e2f",
+      "name": "Handle Agent Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -9504,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Query flow",
+        "height": 800,
+        "width": 1808,
+        "color": "#57004F"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -10512,
+        704
+      ],
+      "typeVersion": 1,
+      "id": "327ec256-8d08-4e60-8abd-a8dc00252f1e",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.finalAnswer }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "18e04e69-cae2-4e26-a719-9b2e7d9652fe",
+      "name": "Telegram - Send Answer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -9184,
+        816
+      ],
+      "webhookId": "b5827ec6-7be7-4629-9fa1-91e45ad76e6b",
+      "credentials": {
+        "telegramApi": {
+          "id": "5R64XqT2UFH0rlFL",
+          "name": "attention-rag"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Question": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer questions with a vector store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Answer questions with a vector store",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store Retrive",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Agent Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Send Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store Retrive": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "Answer questions with a vector store",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Agent Error": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Send Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Send Answer": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "376a7eba-674d-4943-8e99-9c942388e776",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c923fdd75763ed8927337961c1379b337263332fa2f27a0f8f634c2f073a307e"
+  },
+  "nodeGroups": [],
+  "id": "dQu8cVZ7GI5GPbmb",
+  "tags": []
+}

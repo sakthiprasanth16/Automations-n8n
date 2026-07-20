@@ -1,0 +1,263 @@
+{
+  "name": "RAG_1_Document_Ingestion",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "197d4d9f-5c10-45f7-a5f0-e0e50aebb83c",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        48,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://arxiv.org/pdf/1706.03762.pdf",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "35e057c4-e61d-43e8-90bf-8e3f7bd6dbd6",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        48
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "14b1e6d8-bd20-46e2-af0a-9c056a45df78",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        752,
+        288
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "2mBFr0ywtcTckX6c",
+          "name": "for-rag"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "rag-n8n",
+          "mode": "list",
+          "cachedResultName": "rag-n8n"
+        },
+        "options": {
+          "pineconeNamespace": "attention-paper"
+        }
+      },
+      "id": "cca5c4be-6602-489e-aac0-1e9672548ba2",
+      "name": "Pinecone Vector Store Insert",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        48
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "hiC34cIma84ZmG7K",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "3104df08-80d3-4e87-9aa3-f784deb0ee0a",
+      "name": "Extract Text From PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        496,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const DOCUMENT_NAME = 'Attention Is All You Need';\nconst TARGET_TOKENS = 400;\nconst OVERLAP_TOKENS = 50;\nconst WORDS_PER_TOKEN = 0.75;\nconst targetWords = Math.round(TARGET_TOKENS * WORDS_PER_TOKEN);\nconst overlapWords = Math.round(OVERLAP_TOKENS * WORDS_PER_TOKEN);\nconst fullText = items[0].json.text || items[0].json.data || '';\nlet pages = fullText.split('\\f');\nif (pages.length === 1) {\n  const lines = fullText.split(/\\n/);\n  const linesPerPage = 45;\n  pages = [];\n  for (let i = 0; i < lines.length; i += linesPerPage) {\n    pages.push(lines.slice(i, i + linesPerPage).join('\\n'));\n  }\n}\nconst chunks = [];\nlet globalChunkIndex = 0;\npages.forEach((pageText, pageIdx) => {\n  const words = pageText.split(/\\s+/).filter(Boolean);\n  if (words.length === 0) return;\n  let start = 0;\n  while (start < words.length) {\n    const end = Math.min(start + targetWords, words.length);\n    const chunkText = words.slice(start, end).join(' ').trim();\n    if (chunkText.length > 0) {\n      chunks.push({\n        id: `${DOCUMENT_NAME.replace(/\\s+/g, '_')}_p${pageIdx + 1}_c${globalChunkIndex}`,\n        text: chunkText,\n        document_name: DOCUMENT_NAME,\n        page: pageIdx + 1,\n        chunk_index: globalChunkIndex\n      });\n      globalChunkIndex += 1;\n    }\n    if (end === words.length) break;\n    start = end - overlapWords;\n    if (start < 0) start = 0;\n  }\n});\nreturn chunks.map(c => ({ json: c }));"
+      },
+      "id": "07773f56-cd0f-44ee-8272-f4ee9de5b4d2",
+      "name": "Chunk Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.text }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "document_name",
+                "value": "={{ $json.document_name }}"
+              },
+              {
+                "name": "page",
+                "value": "={{ $json.page }}"
+              },
+              {
+                "name": "chunk_index",
+                "value": "={{ $json.chunk_index }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "5c3993f1-8715-4cdf-829c-607171c828cb",
+      "name": "Default Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        976,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "chunkSize": 5000
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        864,
+        448
+      ],
+      "id": "fda27d43-7170-420f-a904-340aa8b9881b",
+      "name": "Character Text Splitter"
+    },
+    {
+      "parameters": {
+        "content": "Embed flow",
+        "height": 608,
+        "width": 1232,
+        "color": "#21836A"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "d42e6f1c-2eef-4a67-b922-5cfd6619f0e4",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract Text From PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store Insert",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text From PDF": {
+      "main": [
+        [
+          {
+            "node": "Chunk Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Text": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone Vector Store Insert",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "99cf0437-ad68-414b-b1b2-578e736356d9",
+  "meta": {
+    "instanceId": "c923fdd75763ed8927337961c1379b337263332fa2f27a0f8f634c2f073a307e"
+  },
+  "nodeGroups": [],
+  "id": "A7kvRfzHsgmYUCxI",
+  "tags": []
+}
