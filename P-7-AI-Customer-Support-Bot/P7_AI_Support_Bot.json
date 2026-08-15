@@ -1,0 +1,201 @@
+{
+  "name": "P7 - AI Customer Support Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-bot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f7a1b2c0-1111-4a2b-8c3d-400000000001",
+      "name": "Receive Question",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1080,
+        260
+      ],
+      "webhookId": "p7-support-bot-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "PASTE_YOUR_GEMINI_API_KEY_HERE"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [ { \"text\": $json.question } ]\n    }\n  ],\n  \"systemInstruction\": {\n    \"parts\": [\n      { \"text\": \"You are a helpful, professional customer support agent. Answer clearly and concisely. If you don't know something, say so honestly rather than guessing.\" }\n    ]\n  }\n} }}",
+        "options": {
+          "timeout": 15000
+        },
+        "onError": "continueErrorOutput"
+      },
+      "id": "f7a1b2c0-1111-4a2b-8c3d-400000000002",
+      "name": "Call Gemini API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -860,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f7a1b2c0-2222-4a2b-8c3d-400000000001",
+              "leftValue": "={{ $json.candidates?.[0]?.content?.parts?.[0]?.text || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f7a1b2c0-1111-4a2b-8c3d-400000000003",
+      "name": "Check Empty Reply",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -640,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"success\", \"reply\": $json.candidates[0].content.parts[0].text } }}",
+        "options": {}
+      },
+      "id": "f7a1b2c0-1111-4a2b-8c3d-400000000004",
+      "name": "Respond With AI Answer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        -420,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "PASTE_SUPPORT_AGENT_EMAIL_HERE",
+        "subject": "=Fallback: Unanswered Customer Support Question",
+        "message": "={{ \"A customer question could not be answered automatically and needs human follow-up.\\n\\nQuestion: \" + ($('Receive Question').item.json.body.question || $('Receive Question').item.json.question || 'N/A') + \"\\n\\nSubmitted at: \" + new Date().toLocaleString() }}",
+        "options": {}
+      },
+      "id": "f7a1b2c0-1111-4a2b-8c3d-400000000005",
+      "name": "Notify Human Agent",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -640,
+        420
+      ],
+      "webhookId": "p7-notify-agent-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"fallback\", \"reply\": \"Thanks for reaching out! Our support team has received your question and one of our executives will get back to you shortly.\" } }}",
+        "options": {}
+      },
+      "id": "f7a1b2c0-1111-4a2b-8c3d-400000000006",
+      "name": "Respond With Fallback Message",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        -420,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Receive Question": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini API": {
+      "main": [
+        [
+          {
+            "node": "Check Empty Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Human Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Empty Reply": {
+      "main": [
+        [
+          {
+            "node": "Notify Human Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond With AI Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Human Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond With Fallback Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "staticData": null,
+  "meta": {
+    "instanceId": "p7-ai-support-bot"
+  }
+}
