@@ -1,0 +1,417 @@
+{
+  "name": "P2 - E-Commerce Order Notifier",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-notifier",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "50b2f059-c209-44db-93d5-d854cf589271",
+      "name": "Webhook - Receive Order",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        416
+      ],
+      "webhookId": "order-notifier-webhook-001",
+      "notes": "Accepts POST requests with order JSON: order_id, customer_email, product_name, total."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "oset-1",
+              "name": "order_id",
+              "type": "string",
+              "value": "={{$json[\"body\"][\"order_id\"]}}"
+            },
+            {
+              "id": "oset-2",
+              "name": "customer_email",
+              "type": "string",
+              "value": "={{$json[\"body\"][\"customer_email\"]}}"
+            },
+            {
+              "id": "oset-3",
+              "name": "product_name",
+              "type": "string",
+              "value": "={{$json[\"body\"][\"product_name\"]}}"
+            },
+            {
+              "id": "oset-4",
+              "name": "total",
+              "type": "string",
+              "value": "={{$json[\"body\"][\"total\"]}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f3788ce4-e4d5-41ef-b893-63f75421c05b",
+      "name": "Set - Extract Order Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -512,
+        416
+      ],
+      "notes": "Pulls order_id, customer_email, product_name, total out of the webhook body payload."
+    },
+    {
+      "parameters": {
+        "chatId": "5058820791",
+        "text": "=🛒 New Order Received!\n\nOrder ID: {{$json[\"order_id\"]}}\nProduct: {{$json[\"product_name\"]}}\nTotal: ₹{{$json[\"total\"]}}\nCustomer: {{$json[\"customer_email\"]}}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "1d1691ed-66df-45c4-8706-00cad2ff100c",
+      "name": "Telegram - Notify Shop Owner",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -256,
+        336
+      ],
+      "webhookId": "4e3812ef-be85-44ee-89ca-93b208dfb7be",
+      "credentials": {
+        "telegramApi": {
+          "id": "FDpJoU6pJzWOOmmh",
+          "name": "firecamp_shop_bot"
+        }
+      },
+      "notes": "Sends a formatted alert to the shop owner's Telegram chat."
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Set - Extract Order Fields').item.json.customer_email }}",
+        "subject": "=Order Confirmation - {{ $('Set - Extract Order Fields').item.json.order_id }}",
+        "emailType": "text",
+        "message": "=Hi,\n\nThank you for your order!\n\nOrder ID: {{$('Set - Extract Order Fields').item.json[\"order_id\"]}}\nProduct: {{$('Set - Extract Order Fields').item.json[\"product_name\"]}}\nTotal: ₹{{$('Set - Extract Order Fields').item.json[\"total\"]}}\n\nWe'll notify you once it ships.\n\nThanks,\nThe Shop Team",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "7b4806e8-a869-435f-9f01-4b21890fbde1",
+      "name": "Gmail - Send Customer Confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        336
+      ],
+      "webhookId": "9a731492-7c00-4fb2-af1f-9e370533e441",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "MA0sOyGhHV9FcPyH",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Sends order confirmation to customer. onError is set to 'continueErrorOutput' so a failure here routes to a second output (index 1) instead of stopping the workflow - this is what lets us capture the real payload on failure."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"success\", \"order_id\": $('Set - Extract Order Fields').item.json[\"order_id\"], \"message\": \"Order processed and notifications sent\" } }}",
+        "options": {}
+      },
+      "id": "38eaa487-cb77-4394-8362-530e07073dda",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        256
+      ],
+      "notes": "Sends a success acknowledgment back to the caller, on the happy path only."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "gset-1",
+              "name": "timestamp",
+              "type": "string",
+              "value": "={{$now.format('yyyy-MM-dd HH:mm:ss')}}"
+            },
+            {
+              "id": "gset-2",
+              "name": "failedNode",
+              "type": "string",
+              "value": "Gmail - Send Customer Confirmation"
+            },
+            {
+              "id": "gset-3",
+              "name": "errorMessage",
+              "type": "string",
+              "value": "={{ $json.error && $json.error.message ? $json.error.message : ($json.error || 'Unknown Gmail error') }}"
+            },
+            {
+              "id": "gset-4",
+              "name": "orderPayload",
+              "type": "string",
+              "value": "={{ JSON.stringify($('Set - Extract Order Fields').item.json) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a8e4ad70-bac2-440c-a4e3-dc1edf92d141",
+      "name": "Set - Format Gmail Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        256,
+        464
+      ],
+      "notes": "Fed directly from Gmail's error output (index 1). Pulls the REAL order data straight from the Set - Extract Order Fields node by name, since the error branch's own $json does not reliably contain the original order fields. This is what fixes the previously-empty Order Payload column."
+    },
+    {
+      "parameters": {},
+      "id": "553e81f7-33fe-4b6f-93e5-9a027969654f",
+      "name": "Error Trigger - Catch Failures",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -752,
+        672
+      ],
+      "notes": "Safety-net catch-all for any OTHER unexpected failure in this workflow (e.g. Telegram itself failing) that isn't already handled by a node-level error output. Requires workflow Settings > Error Workflow > set to this same workflow."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "eset-1",
+              "name": "timestamp",
+              "type": "string",
+              "value": "={{$now.format('yyyy-MM-dd HH:mm:ss')}}"
+            },
+            {
+              "id": "eset-2",
+              "name": "failedNode",
+              "type": "string",
+              "value": "={{$json[\"execution\"][\"lastNodeExecuted\"]}}"
+            },
+            {
+              "id": "eset-3",
+              "name": "errorMessage",
+              "type": "string",
+              "value": "={{$json[\"execution\"][\"error\"][\"message\"]}}"
+            },
+            {
+              "id": "eset-4",
+              "name": "orderPayload",
+              "type": "string",
+              "value": "Not available - see Failed Node column and check Executions tab for full detail"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c6430f74-07ae-44bd-95a7-c1721eadbd19",
+      "name": "Set - Format Error Details",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -512,
+        672
+      ],
+      "notes": "Generic catch-all formatter fed by the workflow-level Error Trigger. This path genuinely cannot access original item data - only execution metadata - which is why orderPayload here is a fixed note rather than blank."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1oPzzTaGOBkpOnUMj_nqpq5uKtY4EqL-xsbQRrTLIqsI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1oPzzTaGOBkpOnUMj_nqpq5uKtY4EqL-xsbQRrTLIqsI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{$json.timestamp}}",
+            "Failed Node": "={{$json.failedNode}}",
+            "Error Message": "={{$json.errorMessage}}",
+            "Order Payload": "={{$json.orderPayload}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Failed Node",
+              "displayName": "Failed Node",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Error Message",
+              "displayName": "Error Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Order Payload",
+              "displayName": "Order Payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a533467e-c89d-44ea-ae59-c915a22ec140",
+      "name": "Google Sheets - Log Failure",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        608,
+        656
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "RTJYOVakObILuFYm",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends a row for every failure, whichever branch it came from - both Set nodes output the same 4 field names (timestamp, failedNode, errorMessage, orderPayload), so both connect here safely."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Receive Order": {
+      "main": [
+        [
+          {
+            "node": "Set - Extract Order Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Extract Order Fields": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Notify Shop Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram - Notify Shop Owner": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Send Customer Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Send Customer Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set - Format Gmail Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Format Gmail Error": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger - Catch Failures": {
+      "main": [
+        [
+          {
+            "node": "Set - Format Error Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Format Error Details": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "woVV7zmmVy9SP3lD",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "9ffb7ee4-8942-4d76-8b0e-ab494548cc76",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c923fdd75763ed8927337961c1379b337263332fa2f27a0f8f634c2f073a307e"
+  },
+  "nodeGroups": [],
+  "id": "woVV7zmmVy9SP3lD",
+  "tags": []
+}
