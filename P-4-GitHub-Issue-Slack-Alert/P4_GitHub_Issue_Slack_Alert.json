@@ -1,0 +1,176 @@
+{
+  "name": "P4_GitHub_Issue_Slack_Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "owner": {
+          "__rl": true,
+          "value": "sakthiprasanth16",
+          "mode": "list",
+          "cachedResultName": "sakthiprasanth16",
+          "cachedResultUrl": "https://github.com/sakthiprasanth16"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "n8n-test-repo-",
+          "mode": "list",
+          "cachedResultName": "n8n-test-repo-",
+          "cachedResultUrl": "https://github.com/sakthiprasanth16/n8n-test-repo-"
+        },
+        "events": [
+          "issues"
+        ],
+        "options": {}
+      },
+      "id": "882a49f7-ef75-41e8-88f0-d7304f01130f",
+      "name": "GitHub Trigger",
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        112
+      ],
+      "webhookId": "31f6948b-f26d-4da0-bda8-d9c36b452756",
+      "credentials": {
+        "githubApi": {
+          "id": "X6PojwlIzzbKRuek",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d3f7e4d0-2222-4a2b-8c3d-100000000001",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "opened",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2561f741-b627-43cc-98bd-b4820d245d88",
+      "name": "New Issue Only",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e4f7e4d0-3333-4a2b-8c3d-100000000001",
+              "name": "slackMessage",
+              "value": "={{ ':rotating_light: *New GitHub Issue Opened*\\n\\n*Repo:* ' + $json.body.repository.full_name + '\\n*Title:* ' + $json.body.issue.title + '\\n*Issue #:* ' + $json.body.issue.number + '\\n*Opened by:* ' + $json.body.issue.user.login + '\\n*Link:* ' + $json.body.issue.html_url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "91bde79c-2c37-45f4-9b5e-d89789cd5192",
+      "name": "Format Slack Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "all-n8n-github-alerts",
+          "mode": "name"
+        },
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "584112d3-fcbe-4a30-8473-ef06235d64f9",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        0
+      ],
+      "webhookId": "2a72ff2c-d75d-423d-85fc-3359a60c0d23",
+      "credentials": {
+        "slackApi": {
+          "id": "YCj7jAVpMj7UVu07",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "GitHub Trigger": {
+      "main": [
+        [
+          {
+            "node": "New Issue Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Issue Only": {
+      "main": [
+        [
+          {
+            "node": "Format Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Slack Message": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "cf9a9b64-f98f-4e99-9292-c5d6dd4b129a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c923fdd75763ed8927337961c1379b337263332fa2f27a0f8f634c2f073a307e"
+  },
+  "nodeGroups": [],
+  "id": "yMZzbzs1LmDhN1Zm",
+  "tags": []
+}
